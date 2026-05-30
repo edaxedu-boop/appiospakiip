@@ -54,6 +54,8 @@
 	<string>Pakiip necesita tu ubicación para mostrarte los restaurantes cercanos y calcular la distancia de los pedidos.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>Pakiip necesita tu ubicación en segundo plano para que los repartidores puedan actualizar su posición en tiempo real durante las entregas.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Pakiip necesita tu ubicación en segundo plano para que los repartidores puedan actualizar su posición en tiempo real durante las entregas.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Pakiip necesita acceso a tu galería para subir comprobantes de pago y logos de restaurantes.</string>
 	<key>NSCameraUsageDescription</key>
