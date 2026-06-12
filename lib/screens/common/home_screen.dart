@@ -301,7 +301,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // ── Filtered list ──────────────────────────────────────────────────────────
   List<RestaurantModel> get _filtered {
     final query = _searchQuery.toLowerCase().trim();
-    return _restaurants.where((r) {
+    final filtered = _restaurants.where((r) {
       // 1. Filtrar por tipo de servicio (Restaurantes vs Hoteles)
       final isHotel =
           r.categories.any((c) => c.toUpperCase() == 'HOTEL') ||
@@ -322,6 +322,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
       return matchesSearch;
     }).toList();
+
+    // Ordenar: abiertos primero, cerrados al final
+    filtered.sort((a, b) {
+      if (a.isOpen && !b.isOpen) return -1;
+      if (!a.isOpen && b.isOpen) return 1;
+      return 0;
+    });
+
+    return filtered;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
