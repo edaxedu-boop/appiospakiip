@@ -626,6 +626,8 @@ class _RiderOrdersScreenState extends State<RiderOrdersScreen>
                     final fee = double.tryParse(o['delivery_fee']?.toString() ?? '0') ?? 0;
                     final commPct = o['rider_commission_pct'] ?? o['commission_applied'] ?? 80;
                     final tipValue = double.tryParse(o['tip']?.toString() ?? '0') ?? 0;
+                    final discount = double.tryParse(o['discount']?.toString() ?? '0') ?? 0;
+                    final service = double.tryParse(o['service_fee']?.toString() ?? '0') ?? 0;
                     final earning = o['rider_earning'] != null 
                         ? (double.tryParse(o['rider_earning'].toString()) ?? 0) 
                         : (fee * commPct / 100);
@@ -634,6 +636,12 @@ class _RiderOrdersScreenState extends State<RiderOrdersScreen>
 
                     return Column(
                       children: [
+                        _summaryRow('Productos Subtotal', 'S/. ${productsSubtotal.toStringAsFixed(2)}'),
+                        _summaryRow('Costo Delivery', 'S/. ${fee.toStringAsFixed(2)}'),
+                        _summaryRow('Tarifa de Servicio', 'S/. ${service.toStringAsFixed(2)}'),
+                        if (tipValue > 0) _summaryRow('Propina Recibida', 'S/. ${tipValue.toStringAsFixed(2)}'),
+                        if (discount > 0) _summaryRow('Descuento Especial', '- S/. ${discount.toStringAsFixed(2)}', isGreen: true),
+                        const Divider(color: Colors.black12, height: 16),
                         _summaryRow(
                           'MONTO A COBRAR AL CLIENTE',
                           'S/. ${totalCliente.toStringAsFixed(2)}',

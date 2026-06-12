@@ -55,6 +55,7 @@ class _Order {
   final double restaurantCommission;
   final double restaurantPayout;
   final bool isManual;
+  final double discount;
   _OrderStatus status;
 
   _Order({
@@ -77,6 +78,7 @@ class _Order {
     this.restaurantCommission = 0.0,
     this.restaurantPayout = 0.0,
     this.isManual = false,
+    this.discount = 0.0,
   });
 
   int get productCount => items.fold(0, (s, i) => s + i.qty);
@@ -232,6 +234,7 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> {
         }
 
         final bool isManual = itemsList.isNotEmpty && (itemsList[0]['name'] == 'Pedido Manual' || itemsList[0]['name'] == 'Favor');
+        final discountVal = double.tryParse(json['discount']?.toString() ?? '0') ?? 0.0;
 
         final currentOrder = _Order(
           id: json['id'].toString(),
@@ -253,6 +256,7 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> {
           restaurantCommission: double.tryParse(json['restaurant_commission']?.toString() ?? '0') ?? 0.0,
           restaurantPayout: double.tryParse(json['restaurant_payout']?.toString() ?? '0') ?? 0.0,
           isManual: isManual,
+          discount: discountVal,
         );
 
         if (status == _OrderStatus.entregado) {
@@ -678,6 +682,7 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> {
                     _priceRow('Envío (Pakiip)', o.deliveryFee),
                     _priceRow('Servicio (Pakiip)', o.serviceFee),
                     if (o.tip > 0) _priceRow('Propina (Motorizado)', o.tip),
+                    if (o.discount > 0) _priceRow('Descuento Especial', -o.discount, color: Colors.green),
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -775,22 +780,27 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> {
     ),
   );
 
-  Widget _priceRow(String label, double val) => Padding(
-    padding: const EdgeInsets.only(bottom: 6),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.poppins(color: Colors.black45, fontSize: 13),
-        ),
-        Text(
-          'S/. ${val.toStringAsFixed(2)}',
-          style: GoogleFonts.poppins(color: Colors.black54, fontSize: 13),
-        ),
-      ],
-    ),
-  );
+  Widget _priceRow(String label, double val, {Color? color}) {
+    final formattedVal = val < 0 
+        ? '- S/. ${val.abs().toStringAsFixed(2)}' 
+        : 'S/. ${val.toStringAsFixed(2)}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.poppins(color: Colors.black45, fontSize: 13),
+          ),
+          Text(
+            formattedVal,
+            style: GoogleFonts.poppins(color: color ?? Colors.black54, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
 
   // ── helpers ──────────────────────────────────────────────────────────────
   String _filterLabel(int i) {

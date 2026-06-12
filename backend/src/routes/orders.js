@@ -24,6 +24,7 @@ async function ensureOrderColumns() {
         await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS recipient_phone VARCHAR(20) DEFAULT NULL');
         await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS sender_name VARCHAR(255) DEFAULT NULL');
         await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS sender_phone VARCHAR(20) DEFAULT NULL');
+        await pool.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount DECIMAL(10,2) DEFAULT 0.00');
     } catch (e) { }
 }
 
@@ -83,6 +84,8 @@ router.post('/', auth, async (req, res) => {
         recipient_phone,
         sender_name,
         sender_phone,
+        discount = 0.00,
+        coupon_code = null,
     } = req.body;
     tip = parseFloat(tip) || 0;
 
@@ -109,14 +112,14 @@ router.post('/', auth, async (req, res) => {
 
     // Obtener comisión del restaurante según su configuración específica
     let restaurant_commission = 0;
-    let restaurant_payout = total;
+    let restaurant_payout = parseFloat(total) + parseFloat(discount);
     try {
         if (!restaurant_id) throw new Error('No restaurant'); // Pakiip Favor - sin comisión
         const resData = await pool.query(
             `SELECT r.commission_rate as custom_rate, r.plan_id
              FROM restaurants r 
              WHERE r.id = $1`,
-            [restaurant_id]
+             [restaurant_id]
         );
         if (resData.rows.length > 0) {
             const planId = parseInt(resData.rows[0].plan_id);
@@ -141,7 +144,7 @@ router.post('/', auth, async (req, res) => {
             }, 0);
 
             restaurant_commission = productSubtotal * (rate / 100);
-            restaurant_payout = total - restaurant_commission;
+            restaurant_payout = (parseFloat(total) + parseFloat(discount)) - restaurant_commission;
         }
     } catch (e) {
         console.error('Error calculating restaurant commission:', e);
@@ -153,8 +156,8 @@ router.post('/', auth, async (req, res) => {
              status, total, delivery_fee, service_fee, payment_method, items, notes, payment_proof_url, order_code,
              restaurant_commission, restaurant_payout, client_lat, client_lng, tip,
              pickup_address, pickup_lat, pickup_lng, recipient_name, recipient_phone,
-             sender_name, sender_phone)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+             sender_name, sender_phone, discount, coupon_code)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
          RETURNING id, status, created_at, order_code`,
         [
             restaurant_id,
@@ -183,6 +186,8 @@ router.post('/', auth, async (req, res) => {
             recipient_phone || null,
             sender_name || null,
             sender_phone || null,
+            parseFloat(discount) || 0.00,
+            coupon_code || null,
         ]
     );
 
@@ -204,7 +209,7 @@ router.get('/my', auth, async (req, res) => {
     const { rows } = await pool.query(
         `SELECT o.id, o.status, o.total, o.delivery_fee, o.service_fee, o.payment_method,
                 o.client_address, o.items, o.notes, o.created_at, o.order_code, o.payment_proof_url,
-                o.tip::FLOAT, o.pickup_address, o.sender_name, o.recipient_name,
+                o.tip::FLOAT, o.pickup_address, o.sender_name, o.recipient_name, o.discount::FLOAT,
                 COALESCE(r.name, 'Pakiip Favor') AS restaurant_name, 
                 r.logo_url AS restaurant_logo
          FROM orders o
@@ -229,7 +234,7 @@ router.get('/restaurant/all', auth, async (req, res) => {
                 o.restaurant_commission::FLOAT, o.restaurant_payout::FLOAT,
                 o.client_address, o.client_name, o.client_phone,
                 o.items, o.notes, o.created_at, o.delivered_at,
-                o.payment_proof_url, o.order_code, o.tip::FLOAT
+                o.payment_proof_url, o.order_code, o.tip::FLOAT, o.discount::FLOAT
          FROM orders o
          WHERE o.restaurant_id = $1
          ORDER BY o.created_at DESC`,
@@ -246,7 +251,7 @@ router.get('/:id', auth, async (req, res) => {
         `SELECT o.id, o.status, o.total, o.delivery_fee, o.service_fee, o.payment_method,
                 o.client_address, o.client_name, o.client_phone,
                 o.items, o.notes, o.created_at, o.delivered_at, o.order_code, o.payment_proof_url,
-                o.tip::FLOAT,
+                o.tip::FLOAT, o.discount::FLOAT,
                 COALESCE(r.name, 'Pakiip Favor') AS restaurant_name, 
                 r.logo_url AS restaurant_logo, 
                 COALESCE(r.phone, o.sender_phone) AS restaurant_phone

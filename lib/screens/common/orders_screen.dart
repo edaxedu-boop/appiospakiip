@@ -566,6 +566,7 @@ class ShortDetails extends StatelessWidget {
               final total = double.tryParse(order['total']?.toString() ?? '0') ?? 0;
               final delivery = double.tryParse(order['delivery_fee']?.toString() ?? '0') ?? 0;
               final tip = double.tryParse(order['tip']?.toString() ?? '0') ?? 0;
+              final discount = double.tryParse(order['discount']?.toString() ?? '0') ?? 0;
               // Leer service_fee directamente del backend
               final service = double.tryParse(order['service_fee']?.toString() ?? '0') ?? serviceFee;
 
@@ -591,7 +592,7 @@ class ShortDetails extends StatelessWidget {
                   }
                 } catch (e) {
                   // Fallback: restar del total
-                  subtotal = total - delivery - service - tip;
+                  subtotal = total - delivery - service - tip + discount;
                 }
               }
 
@@ -601,6 +602,7 @@ class ShortDetails extends StatelessWidget {
                   _price('Costo de envío', delivery),
                   _price('Tarifa de servicio', service),
                   if (tip > 0) _price('Propina (Motorizado)', tip),
+                  if (discount > 0) _price('Descuento', -discount, color: Colors.green),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -620,7 +622,22 @@ class ShortDetails extends StatelessWidget {
   }
 
   Widget _row(IconData icon, String t, String v) => Row(children: [Icon(icon, color: Colors.black45, size: 20), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t, style: GoogleFonts.poppins(color: Colors.black45, fontSize: 11, fontWeight: FontWeight.bold)), Text(v, style: GoogleFonts.poppins(color: Colors.black87, fontSize: 14))]))]);
-  Widget _price(String l, double a) => Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(l, style: GoogleFonts.poppins(color: Colors.black54, fontSize: 14)), Text('S/. ${a.toStringAsFixed(2)}', style: GoogleFonts.poppins(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.w500))]));
+  
+  Widget _price(String l, double a, {Color? color}) {
+    final formattedVal = a < 0 
+        ? '- S/. ${a.abs().toStringAsFixed(2)}' 
+        : 'S/. ${a.toStringAsFixed(2)}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12), 
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+        children: [
+          Text(l, style: GoogleFonts.poppins(color: Colors.black54, fontSize: 14)), 
+          Text(formattedVal, style: GoogleFonts.poppins(color: color ?? Colors.black87, fontSize: 14, fontWeight: FontWeight.w500))
+        ]
+      )
+    );
+  }
 }
 
 

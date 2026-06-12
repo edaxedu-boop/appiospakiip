@@ -39,10 +39,23 @@ class _CartScreenState extends State<CartScreen> {
   double _priceIntermediate = 1.00;
   double _priceLong = 2.00;
 
+  // Coupon variables
+  final TextEditingController _couponController = TextEditingController();
+  bool _isValidatingCoupon = false;
+  String? _appliedCouponCode;
+  double _couponDiscount = 0.00;
+  String? _couponError;
+
   @override
   void initState() {
     super.initState();
     _loadGlobalConfig();
+  }
+
+  @override
+  void dispose() {
+    _couponController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadGlobalConfig() async {
@@ -114,7 +127,7 @@ class _CartScreenState extends State<CartScreen> {
 
     double serviceFee = _serviceFee;
     double tip = _selectedTip;
-    double total = subtotal + deliveryCost + serviceFee + tip;
+    double total = ((subtotal + deliveryCost + serviceFee + tip) - _couponDiscount).clamp(0.00, double.infinity);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -473,6 +486,144 @@ class _CartScreenState extends State<CartScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 24),
+
+                      // Sección de Cupón de Descuento
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '¿Tienes un cupón de descuento?',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _couponController,
+                                    enabled: _appliedCouponCode == null && !_isValidatingCoupon,
+                                    textCapitalization: TextCapitalization.characters,
+                                    style: GoogleFonts.poppins(color: Colors.black87, fontSize: 14),
+                                    decoration: InputDecoration(
+                                      hintText: 'Ingresa código...',
+                                      hintStyle: GoogleFonts.poppins(color: Colors.black38),
+                                      prefixIcon: const Icon(Icons.confirmation_number_outlined, color: Color(0xFFFA7516)),
+                                      filled: true,
+                                      fillColor: const Color(0xFFF7F7F7),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                        borderSide: const BorderSide(
+                                          color: Color(0xFFFA7516),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                SizedBox(
+                                  height: 54,
+                                  child: _appliedCouponCode != null
+                                      ? ElevatedButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              _appliedCouponCode = null;
+                                              _couponDiscount = 0.00;
+                                              _couponController.clear();
+                                            });
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.redAccent,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(14),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Quitar',
+                                            style: GoogleFonts.poppins(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        )
+                                      : ElevatedButton(
+                                          onPressed: _isValidatingCoupon
+                                              ? null
+                                              : () {
+                                                  _validateCoupon(
+                                                    _couponController.text,
+                                                    cartService.currentRestaurantId ?? '0',
+                                                    subtotal,
+                                                  );
+                                                },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFFFA7516),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(14),
+                                            ),
+                                          ),
+                                          child: _isValidatingCoupon
+                                              ? const SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child: CircularProgressIndicator(
+                                                    color: Colors.white,
+                                                    strokeWidth: 2,
+                                                  ),
+                                                )
+                                              : Text(
+                                                  'Aplicar',
+                                                  style: GoogleFonts.poppins(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                        ),
+                                ),
+                              ],
+                            ),
+                            if (_couponError != null) ...[
+                              const SizedBox(height: 6),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text(
+                                  _couponError!,
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.redAccent,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (_appliedCouponCode != null) ...[
+                              const SizedBox(height: 6),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text(
+                                  '¡Cupón $_appliedCouponCode aplicado con éxito!',
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.green,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
 
                       const SizedBox(height: 32),
 
@@ -500,6 +651,14 @@ class _CartScreenState extends State<CartScreen> {
                               CostRow(
                                 label: '🤝 Propina al Motorizado',
                                 value: 'S/ ${_selectedTip.toStringAsFixed(2)}',
+                                highlight: true,
+                              ),
+                            ],
+                            if (_couponDiscount > 0) ...[
+                              const SizedBox(height: 8),
+                              CostRow(
+                                label: 'Descuento Cupón ($_appliedCouponCode)',
+                                value: '- S/ ${_couponDiscount.toStringAsFixed(2)}',
                                 highlight: true,
                               ),
                             ],
@@ -1833,6 +1992,47 @@ class _CartScreenState extends State<CartScreen> {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+  Future<void> _validateCoupon(String code, String restaurantId, double subtotal) async {
+    if (code.trim().isEmpty) return;
+    setState(() {
+      _isValidatingCoupon = true;
+      _couponError = null;
+    });
+    try {
+      final res = await ApiService.postAuth('/coupons/validate', {
+        'code': code.trim(),
+        'restaurant_id': int.parse(restaurantId),
+        'subtotal': subtotal,
+      });
+      if (res['valid'] == true) {
+        setState(() {
+          _appliedCouponCode = res['code'];
+          _couponDiscount = double.tryParse(res['calculated_discount'].toString()) ?? 0.00;
+          _couponError = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('¡Cupón aplicado con éxito! 🎉')),
+        );
+      } else {
+        setState(() {
+          _appliedCouponCode = null;
+          _couponDiscount = 0.00;
+          _couponError = res['error'] ?? 'Cupón inválido';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _appliedCouponCode = null;
+        _couponDiscount = 0.00;
+        _couponError = 'Error al validar el cupón';
+      });
+    } finally {
+      setState(() {
+        _isValidatingCoupon = false;
+      });
+    }
+  }
+
   Future<void> _submitOrder({
     required BuildContext context,
     required String paymentMethod,
@@ -1900,7 +2100,7 @@ class _CartScreenState extends State<CartScreen> {
       }
 
       final total =
-          cartService.totalPrice + deliveryCost + _serviceFee + _selectedTip;
+          (cartService.totalPrice + deliveryCost + _serviceFee + _selectedTip) - _couponDiscount;
 
       final data = {
         'restaurant_id': int.parse(cartService.currentRestaurantId ?? '0'),
@@ -1915,6 +2115,8 @@ class _CartScreenState extends State<CartScreen> {
         'client_phone': clientPhone,
         'client_lat': cartService.userLat,
         'client_lng': cartService.userLng,
+        'discount': _couponDiscount,
+        'coupon_code': _appliedCouponCode,
         'notes': changeAmount != null
             ? 'Paga con S/ ${(changeAmount + total).toStringAsFixed(2)}. Vuelto: S/ ${changeAmount.toStringAsFixed(2)}'
             : null,

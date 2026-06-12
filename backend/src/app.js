@@ -32,6 +32,7 @@ app.use('/orders', require('./routes/orders'));
 app.use('/admin', require('./routes/admin'));
 app.use('/restaurant-payments', require('./routes/restaurant_payments'));
 app.use('/maps', require('./routes/maps'));
+app.use('/coupons', require('./routes/coupons'));
 
 
 // Servir archivos estáticos

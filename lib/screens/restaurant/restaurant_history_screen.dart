@@ -179,6 +179,7 @@ class _RestaurantHistoryScreenState extends State<RestaurantHistoryScreen> {
     final code = order['order_code'] ?? '---';
     final total = double.tryParse(order['total']?.toString() ?? '0') ?? 0.0;
     final client = order['client_name'] ?? order['client'] ?? 'Cliente';
+    final discount = double.tryParse(order['discount']?.toString() ?? '0') ?? 0.0;
     
     double subtotal = 0;
     try {
@@ -207,7 +208,7 @@ class _RestaurantHistoryScreenState extends State<RestaurantHistoryScreen> {
       subtotal = total - 
         (double.tryParse(order['delivery_fee']?.toString() ?? '0') ?? 0) - 
         (double.tryParse(order['service_fee']?.toString() ?? '0') ?? 0) -
-        (double.tryParse(order['tip']?.toString() ?? '0') ?? 0);
+        (double.tryParse(order['tip']?.toString() ?? '0') ?? 0) + discount;
     }
 
     final List<dynamic> itemsList = (() {
@@ -369,6 +370,7 @@ class _RestaurantHistoryScreenState extends State<RestaurantHistoryScreen> {
                   }
                   return const SizedBox.shrink();
                 })(),
+                if (discount > 0) _priceRow('Descuento Especial', -discount, color: Colors.green),
                 const SizedBox(height: 4),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -557,7 +559,10 @@ class _RestaurantHistoryScreenState extends State<RestaurantHistoryScreen> {
     }).toList();
   }
 
-  Widget _priceRow(String label, double value) {
+  Widget _priceRow(String label, double value, {Color? color}) {
+    final formattedVal = value < 0 
+        ? '- S/. ${value.abs().toStringAsFixed(2)}' 
+        : 'S/. ${value.toStringAsFixed(2)}';
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
@@ -568,8 +573,8 @@ class _RestaurantHistoryScreenState extends State<RestaurantHistoryScreen> {
             style: GoogleFonts.poppins(color: Colors.black38, fontSize: 13),
           ),
           Text(
-            'S/. ${value.toStringAsFixed(2)}',
-            style: GoogleFonts.poppins(color: Colors.black54, fontSize: 13),
+            formattedVal,
+            style: GoogleFonts.poppins(color: color ?? Colors.black54, fontSize: 13),
           ),
         ],
       ),

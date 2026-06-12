@@ -162,6 +162,7 @@ router.get('/orders', auth, async (req, res) => {
                 o.restaurant_commission::FLOAT,
                 o.restaurant_payout::FLOAT,
                 o.tip::FLOAT,
+                o.discount::FLOAT,
                 o.rider_id,
                 o.status,
                 o.created_at,
@@ -383,7 +384,7 @@ router.get('/restaurants/:id/orders', auth, async (req, res) => {
     let query = `
         SELECT 
             o.id, o.order_code, o.total::FLOAT, o.delivery_fee::FLOAT, o.service_fee::FLOAT, 
-            o.restaurant_commission::FLOAT, o.tip::FLOAT, o.status, o.created_at, 
+            o.restaurant_commission::FLOAT, o.tip::FLOAT, o.discount::FLOAT, o.status, o.created_at, 
             o.client_name, o.client_phone, o.client_address, o.items, o.payment_method,
             r.commission_rate as restaurant_commission_rate,
             r.plan_id as restaurant_plan_id
@@ -435,6 +436,46 @@ router.get('/riders/:id/pending-orders', auth, async (req, res) => {
         `, [id]);
         res.json(rows);
     } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ── PATCH /admin/orders/:id/discount (Aplicar descuento a un pedido) ──
+router.patch('/orders/:id/discount', auth, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Prohibido' });
+    const { id } = req.params;
+    const discountAmount = parseFloat(req.body.discount);
+
+    if (isNaN(discountAmount) || discountAmount < 0) {
+        return res.status(400).json({ error: 'Descuento inválido' });
+    }
+
+    try {
+        // Obtener el pedido actual
+        const { rows } = await pool.query('SELECT total, discount FROM orders WHERE id = $1', [id]);
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Pedido no encontrado' });
+        }
+
+        const currentTotal = parseFloat(rows[0].total || 0);
+        const currentDiscount = parseFloat(rows[0].discount || 0);
+        const originalTotal = currentTotal + currentDiscount;
+
+        if (discountAmount > originalTotal) {
+            return res.status(400).json({ error: 'El descuento no puede ser mayor al total original del pedido' });
+        }
+
+        const newTotal = originalTotal - discountAmount;
+
+        // Actualizar el pedido
+        await pool.query(
+            'UPDATE orders SET total = $1, discount = $2 WHERE id = $3',
+            [newTotal, discountAmount, id]
+        );
+
+        res.json({ message: 'Descuento aplicado correctamente', total: newTotal, discount: discountAmount });
+    } catch (e) {
+        console.error('Error al aplicar descuento:', e);
         res.status(500).json({ error: e.message });
     }
 });

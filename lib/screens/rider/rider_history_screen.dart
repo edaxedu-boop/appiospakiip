@@ -292,14 +292,17 @@ class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
                     ),
                     const SizedBox(width: 8),
                   ],
-                  Text(
-                    'Cobrado: S/. ${o['total']}',
-                    style: GoogleFonts.poppins(
-                      color: Colors.black38,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11,
-                    ),
-                  ),
+                  (() {
+                    final discount = double.tryParse(o['discount']?.toString() ?? '0') ?? 0;
+                    return Text(
+                      'Cobrado: S/. ${o['total']}${discount > 0 ? ' (Desc: S/. ${discount.toStringAsFixed(2)})' : ''}',
+                      style: GoogleFonts.poppins(
+                        color: Colors.black38,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    );
+                  })(),
                 ],
               ),
             ],

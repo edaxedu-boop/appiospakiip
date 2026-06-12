@@ -10,6 +10,7 @@ import 'package:pakiip/screens/admin/admin_riders_screen.dart';
 import 'package:pakiip/screens/admin/admin_orders_screen.dart';
 import 'package:pakiip/screens/admin/admin_restaurant_settlements_screen.dart';
 import 'package:pakiip/screens/admin/admin_clients_screen.dart';
+import 'package:pakiip/screens/admin/admin_coupons_screen.dart';
 import 'package:pakiip/screens/auth/change_password_screen.dart';
 import 'package:pakiip/screens/auth/login_screen.dart';
 import '../../services/api_service.dart';
@@ -627,6 +628,16 @@ class _AdminComingSoonScreenState extends State<AdminComingSoonScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (_) => const AdminConfigScreen(),
+                        ),
+                      ),
+                    ),
+                    _actionTile(
+                      icon: Icons.confirmation_number_rounded,
+                      label: 'Cupones de\nDescuento',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AdminCouponsScreen(),
                         ),
                       ),
                     ),

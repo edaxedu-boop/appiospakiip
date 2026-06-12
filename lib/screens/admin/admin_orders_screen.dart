@@ -619,6 +619,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                       double deliveryFee = _num(o['delivery_fee']);
                       double tip = _num(o['tip']);
                       double serviceFee = _num(o['service_fee']);
+                      double discount = _num(o['discount']);
 
                       double riderEarning = _num(o['rider_earning']);
                       if (riderEarning <= 0) {
@@ -629,12 +630,12 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                             (deliveryFee * (riderCommRate / 100)) + tip;
                       }
 
-                      // Ganancia de pakiip = comision_restaurante + tarifa_servicio + (delivery - ganancia_repartidor_sin_propina)
+                      // Ganancia de pakiip = comision_restaurante + tarifa_servicio + (delivery - ganancia_repartidor_sin_propina) - descuento
                       double deliveryAppProfit =
                           deliveryFee - (riderEarning - tip);
                       if (deliveryAppProfit < 0) deliveryAppProfit = 0;
                       double appProfit =
-                          restCommission + serviceFee + deliveryAppProfit;
+                          restCommission + serviceFee + deliveryAppProfit - discount;
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -662,6 +663,8 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                                 _totalRow('Tarifa Pakiip', o['service_fee']),
                                 if (tip > 0)
                                   _totalRow('Propina (Motorizado)', tip),
+                                if (discount > 0)
+                                  _totalRow('Descuento Admin', -discount, color: Colors.green),
                                 const Divider(
                                   height: 24,
                                   color: Colors.black12,
@@ -747,6 +750,8 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                                   'Margen App (Delivery)',
                                   deliveryAppProfit,
                                 ),
+                                if (discount > 0)
+                                  _totalRow('Descuento Financiado por App', -discount, color: Colors.redAccent),
                                 const Divider(
                                   height: 16,
                                   color: Colors.black12,
@@ -758,6 +763,29 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                                   color: Colors.purple,
                                 ),
                               ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _promptDiscount(o),
+                              icon: const Icon(Icons.local_offer_rounded, color: Colors.white),
+                              label: Text(
+                                discount > 0 ? 'Editar Descuento' : 'Aplicar Descuento',
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _red,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                              ),
                             ),
                           ),
                         ],
@@ -829,6 +857,96 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     );
   }
 
+  void _promptDiscount(Map<String, dynamic> o) {
+    final controller = TextEditingController(text: _num(o['discount']).toString());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Aplicar Descuento',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Ingrese el monto de descuento en S/.',
+              style: GoogleFonts.poppins(color: Colors.black54, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: GoogleFonts.robotoMono(fontWeight: FontWeight.bold),
+              decoration: InputDecoration(
+                prefixText: 'S/. ',
+                hintText: '0.00',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: _red, width: 2),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.poppins(color: Colors.black38, fontWeight: FontWeight.w600),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final val = double.tryParse(controller.text) ?? 0.0;
+              if (val < 0) {
+                _snack('El descuento no puede ser negativo', Colors.red);
+                return;
+              }
+              Navigator.pop(ctx); // Close dialog
+              Navigator.pop(context); // Close details sheet
+              _applyDiscount(o['id'].toString(), val);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              'Aplicar',
+              style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _applyDiscount(String orderId, double discount) async {
+    setState(() => _loading = true);
+    try {
+      final res = await ApiService.patch('/admin/orders/$orderId/discount', {
+        'discount': discount,
+      });
+      _snack(res['message'] ?? 'Descuento aplicado', Colors.green);
+      _loadOrders();
+    } catch (e) {
+      setState(() => _loading = false);
+      _snack('Error al aplicar descuento: $e', Colors.red);
+    }
+  }
+
   Widget _totalRow(
     String label,
     dynamic val, {
@@ -836,6 +954,11 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     Color? color,
     double fontSize = 13,
   }) {
+    final double value = _num(val);
+    final String formattedVal = value < 0
+        ? '- S/. ${value.abs().toStringAsFixed(2)}'
+        : 'S/. ${value.toStringAsFixed(2)}';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -850,7 +973,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
             ),
           ),
           Text(
-            'S/. ${_format(val)}',
+            formattedVal,
             style: GoogleFonts.poppins(
               color: color ?? Colors.black87,
               fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
