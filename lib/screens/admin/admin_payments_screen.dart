@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/api_service.dart';
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 
 class AdminPaymentsScreen extends StatefulWidget {
@@ -24,6 +25,7 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
   @override
   void initState() {
     super.initState();
+    initializeDateFormatting('es', null);
     _loadData();
   }
 
@@ -486,8 +488,20 @@ class _RiderOrdersModalState extends State<_RiderOrdersModal> {
   }
 
   Widget _orderItem(Map<String, dynamic> o) {
-    final date = DateTime.parse(o['created_at']);
-    final formattedDate = DateFormat('dd MMM, hh:mm a').format(date);
+    String formattedDate = '';
+    try {
+      var date = DateTime.parse(o['created_at']);
+      if (!date.isUtc) {
+        final str = o['created_at'].toString();
+        if (!str.contains('Z') && !str.contains('+') && !str.contains('-')) {
+          date = DateTime.parse('${str}Z');
+        }
+      }
+      final peruDate = date.toUtc().subtract(const Duration(hours: 5));
+      formattedDate = DateFormat('dd MMM, hh:mm a', 'es').format(peruDate);
+    } catch (_) {
+      formattedDate = o['created_at'].toString();
+    }
     final double fee = (o['delivery_fee'] ?? 0).toDouble();
     final double tip = (o['tip'] ?? 0).toDouble();
     final double commPct = (widget.rider['commission'] ?? 0).toDouble();

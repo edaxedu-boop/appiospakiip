@@ -145,8 +145,15 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     final status = o['status'] ?? 'pending';
     String formattedDate = '';
     try {
-      final date = DateTime.parse(o['created_at']);
-      formattedDate = DateFormat('dd MMM, HH:mm', 'es').format(date);
+      var date = DateTime.parse(o['created_at']);
+      if (!date.isUtc) {
+        final str = o['created_at'].toString();
+        if (!str.contains('Z') && !str.contains('+') && !str.contains('-')) {
+          date = DateTime.parse('${str}Z');
+        }
+      }
+      final peruDate = date.toUtc().subtract(const Duration(hours: 5));
+      formattedDate = DateFormat('dd MMM, hh:mm a', 'es').format(peruDate);
     } catch (_) {
       formattedDate = o['created_at'].toString();
     }
