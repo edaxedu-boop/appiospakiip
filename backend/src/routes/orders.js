@@ -193,6 +193,22 @@ router.post('/', auth, async (req, res) => {
 
     console.log(`[Orders] Pedido insertado con éxito, ID: ${rows[0].id}`);
 
+    // Enviar notificación push al restaurante
+    try {
+        if (restaurant_id) {
+            const { sendPushNotification } = require('../services/notificationService');
+            sendPushNotification(
+                'restaurant',
+                restaurant_id,
+                '¡Nuevo pedido recibido!',
+                `Tienes un nuevo pedido #${rows[0].order_code || rows[0].id}. ¡Confírmalo ahora!`,
+                { orderId: rows[0].id.toString(), type: 'new_order' }
+            );
+        }
+    } catch (err) {
+        console.error('Error sending new order notification:', err);
+    }
+
     res.status(201).json({
         message: 'Pedido creado',
         order_id: rows[0].id,
@@ -282,7 +298,7 @@ router.patch('/:id/status', auth, async (req, res) => {
     }
 
     // Check current status and permissions
-    const { rows: currentOrder } = await pool.query('SELECT status, client_id, restaurant_id, rider_id FROM orders WHERE id = $1', [orderId]);
+    const { rows: currentOrder } = await pool.query('SELECT status, client_id, restaurant_id, rider_id, order_code FROM orders WHERE id = $1', [orderId]);
     if (currentOrder.length === 0) return res.status(404).json({ error: 'Pedido no encontrado' });
 
     const order = currentOrder[0];
@@ -321,6 +337,43 @@ router.patch('/:id/status', auth, async (req, res) => {
         `UPDATE orders SET status = $1 ${extra} WHERE id = $2`,
         [status, orderId]
     );
+
+    // Enviar notificaciones correspondientes al cambio de estado
+    try {
+        const { sendPushNotification, notifyAllAvailableRiders } = require('../services/notificationService');
+        
+        // Notificaciones al cliente
+        if (order.client_id) {
+            let title = '';
+            let body = '';
+            if (status === 'accepted' || status === 'preparing') {
+                title = 'Pedido aceptado';
+                body = `¡Tu pedido #${order.order_code || orderId} ha sido aceptado por el restaurante y está en preparación!`;
+            } else if (status === 'ready') {
+                title = 'Pedido listo';
+                body = `¡Tu pedido #${order.order_code || orderId} ya está listo y a la espera de ser recogido!`;
+            } else if (status === 'cancelled') {
+                title = 'Pedido cancelado';
+                body = `Tu pedido #${order.order_code || orderId} ha sido cancelado.`;
+            }
+            if (title && body) {
+                sendPushNotification('client', order.client_id, title, body, { orderId: orderId.toString(), type: status });
+            }
+        }
+
+        // Notificaciones a los repartidores
+        if (status === 'ready') {
+            if (order.rider_id) {
+                // Si ya tiene motorizado asignado, notificarle a él directamente
+                sendPushNotification('rider', order.rider_id, 'Pedido listo para recoger', `El pedido #${order.order_code || orderId} ya está listo para ser recogido en el restaurante.`, { orderId: orderId.toString(), type: 'ready' });
+            } else {
+                // Si no tiene motorizado asignado, notificar a todos los motorizados disponibles
+                notifyAllAvailableRiders('¡Pedido disponible!', `Hay un pedido listo para entregar. ¡Acéptalo ahora!`, { orderId: orderId.toString(), type: 'available_order' });
+            }
+        }
+    } catch (err) {
+        console.error('Error sending status change notifications:', err);
+    }
 
     res.json({ message: 'Estado actualizado', status });
 });

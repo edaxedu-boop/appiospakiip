@@ -131,12 +131,11 @@ class _RiderPanelScreenState extends State<RiderPanelScreen> {
     if (!silent) setState(() => _isLoading = true);
     try {
       final available = await ApiService.getList('/riders/orders/available');
-      final active = await ApiService.get('/riders/orders/active');
+      final active = await ApiService.getList('/riders/orders/active');
       final profile = await ApiService.get('/riders/me');
       final earnings = await ApiService.get('/riders/earnings');
 
-      int count = available.length;
-      if (active.isNotEmpty) count++;
+      int count = available.length + active.length;
 
       if (mounted) {
         setState(() {
@@ -161,6 +160,103 @@ class _RiderPanelScreenState extends State<RiderPanelScreen> {
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _confirmDeleteAccount() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          '¿Eliminar tu cuenta?',
+          style: GoogleFonts.poppins(
+            color: Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'Esta acción es irreversible y no podrás recuperar tu información.',
+          style: GoogleFonts.poppins(color: Colors.black54),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.poppins(color: Colors.black38),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _confirmDeleteAccountDouble();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: Text(
+              'Continuar',
+              style: GoogleFonts.poppins(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteAccountDouble() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Confirmación Definitiva',
+          style: GoogleFonts.poppins(
+            color: Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'Se borrarán de manera permanente tus datos personales: nombre, correo electrónico, teléfono, historial y credenciales de acceso. ¿Confirmas la eliminación definitiva?',
+          style: GoogleFonts.poppins(color: Colors.black54),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.poppins(color: Colors.black38),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              setState(() => _isLoading = true);
+              try {
+                await ApiService.delete('/auth/delete-account');
+                await ApiService.logout();
+                if (mounted) {
+                  _snack('Cuenta eliminada exitosamente');
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (r) => false,
+                  );
+                }
+              } catch (e) {
+                setState(() => _isLoading = false);
+                _snack('Error al eliminar cuenta: $e');
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(
+              'Eliminar Definitivamente',
+              style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _logout() {
@@ -564,6 +660,25 @@ class _RiderPanelScreenState extends State<RiderPanelScreen> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: TextButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx); // Close profile sheet
+                    _confirmDeleteAccount();
+                  },
+                  icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
+                  label: Text(
+                    'ELIMINAR CUENTA',
+                    style: GoogleFonts.poppins(
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
             ],

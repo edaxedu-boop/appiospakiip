@@ -51,6 +51,25 @@ async function setup() {
             END $$;
         `);
 
+        // 2. Agregar fcm_token a admins, restaurants, riders y clients si no existen
+        await appClient.query(`
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admins' AND column_name='fcm_token') THEN
+                    ALTER TABLE admins ADD COLUMN fcm_token TEXT;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='restaurants' AND column_name='fcm_token') THEN
+                    ALTER TABLE restaurants ADD COLUMN fcm_token TEXT;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='riders' AND column_name='fcm_token') THEN
+                    ALTER TABLE riders ADD COLUMN fcm_token TEXT;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='fcm_token') THEN
+                    ALTER TABLE clients ADD COLUMN fcm_token TEXT;
+                END IF;
+            END $$;
+        `);
+
         // 2. Agregar maintenance_mode y otros a app_config si no existen
         // (Aunque la tabla app_config es nueva, esto asegura que el setup sea robusto)
         await appClient.query(`

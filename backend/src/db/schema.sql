@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS admins (
   email      VARCHAR(255) UNIQUE NOT NULL,
   password   VARCHAR(255) NOT NULL,
   role       VARCHAR(50)  DEFAULT 'admin',
+  fcm_token  TEXT,
   created_at TIMESTAMP    DEFAULT NOW()
 );
 
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS restaurants (
   address     TEXT,
   location    GEOGRAPHY(POINT, 4326),          -- lat/lng para geolocalización
   logo_url    TEXT,
+  fcm_token   TEXT,
   created_at  TIMESTAMP    DEFAULT NOW()
 );
 
@@ -59,6 +61,7 @@ CREATE TABLE IF NOT EXISTS riders (
   location    GEOGRAPHY(POINT, 4326),
   vehicle     VARCHAR(50)  DEFAULT 'moto',
   commission  DECIMAL(5,2) DEFAULT 60.00,        -- % comisión
+  fcm_token   TEXT,
   created_at  TIMESTAMP    DEFAULT NOW()
 );
 
@@ -104,6 +107,7 @@ CREATE TABLE IF NOT EXISTS clients (
   avatar_url       TEXT,
   location         GEOGRAPHY(POINT, 4326),
   active           BOOLEAN      DEFAULT true,
+  fcm_token        TEXT,
   created_at       TIMESTAMP    DEFAULT NOW()
 );
 

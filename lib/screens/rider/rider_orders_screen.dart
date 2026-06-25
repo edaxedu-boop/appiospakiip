@@ -17,7 +17,8 @@ class _RiderOrdersScreenState extends State<RiderOrdersScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<dynamic> _availableOrders = [];
-  Map<String, dynamic>? _activeOrder;
+  List<dynamic> _activeOrders = [];
+  int _selectedActiveIdx = 0;
   bool _isLoading = true;
   bool _isTaking = false;
   Timer? _refreshTimer;
@@ -50,17 +51,20 @@ class _RiderOrdersScreenState extends State<RiderOrdersScreen>
     if (!silent) setState(() => _isLoading = true);
     try {
       final available = await ApiService.getList('/riders/orders/available');
-      final active = await ApiService.get('/riders/orders/active');
+      final active = await ApiService.getList('/riders/orders/active');
 
       if (mounted) {
         setState(() {
           _availableOrders = available;
-          _activeOrder = active.isEmpty ? null : active;
+          _activeOrders = active;
+          if (_selectedActiveIdx >= _activeOrders.length) {
+            _selectedActiveIdx = 0;
+          }
           _isLoading = false;
         });
 
         // Solo saltar al tab de activo en la carga inicial si no estábamos ahí
-        if (!silent && _activeOrder != null && _tabController.index == 0) {
+        if (!silent && _activeOrders.isNotEmpty && _tabController.index == 0) {
           _tabController.animateTo(1);
         }
       }
@@ -281,7 +285,7 @@ class _RiderOrdersScreenState extends State<RiderOrdersScreen>
   }
 
   Widget _buildActiveTab() {
-    if (_activeOrder == null) {
+    if (_activeOrders.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -289,7 +293,7 @@ class _RiderOrdersScreenState extends State<RiderOrdersScreen>
             const Icon(Icons.route_outlined, size: 64, color: Colors.white10),
             const SizedBox(height: 16),
             Text(
-              'No tienes un pedido activo.\n¡Toma uno de la lista!',
+              'No tienes pedidos activos.\n¡Toma uno de la lista!',
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(color: Colors.black26),
             ),
@@ -297,14 +301,64 @@ class _RiderOrdersScreenState extends State<RiderOrdersScreen>
         ),
       );
     }
+
+    if (_selectedActiveIdx >= _activeOrders.length) {
+      _selectedActiveIdx = 0;
+    }
+    final currentOrder = _activeOrders[_selectedActiveIdx] as Map<String, dynamic>;
+
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _orderCard(_activeOrder!, isAvailable: false),
+          if (_activeOrders.length > 1) ...[
+            Text(
+              'TUS PEDIDOS EN CURSO (${_activeOrders.length})',
+              style: GoogleFonts.poppins(
+                color: Colors.black38,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 48,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _activeOrders.length,
+                itemBuilder: (ctx, idx) {
+                  final o = _activeOrders[idx];
+                  final isSelected = idx == _selectedActiveIdx;
+                  final code = o['order_code'] ?? o['id'] ?? '';
+                  final isReady = o['status'] == 'ready';
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(
+                        '#$code${isReady ? ' (¡Listo!)' : ''}',
+                        style: GoogleFonts.poppins(
+                          color: isSelected ? Colors.white : Colors.black87,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 12,
+                        ),
+                      ),
+                      selected: isSelected,
+                      selectedColor: _red,
+                      backgroundColor: Colors.grey.shade100,
+                      onSelected: (_) => setState(() => _selectedActiveIdx = idx),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          _orderCard(currentOrder, isAvailable: false),
           const SizedBox(height: 24),
-          _buildDeliverySteps(_activeOrder!),
+          _buildDeliverySteps(currentOrder),
         ],
       ),
     );

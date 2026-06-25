@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/api_service.dart';
+import '../../services/push_notification_service.dart';
 import '../../widgets/delivery_location_dialog.dart';
 import 'package:pakiip/screens/common/home_screen.dart';
 
@@ -48,6 +49,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _passCtrl.text,
         phone: _phoneCtrl.text.trim(),
       );
+
+      // Registrar token FCM para notificaciones push
+      PushNotificationService.registerFcmToken();
 
       if (!mounted) return;
 

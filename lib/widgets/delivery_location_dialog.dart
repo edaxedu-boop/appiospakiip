@@ -124,6 +124,7 @@ class _DeliveryLocationDialogState extends State<DeliveryLocationDialog> {
       final data = await ApiService.get(
         '/maps/geocode?latlng=${pos.latitude},${pos.longitude}',
       );
+      if (!mounted) return;
       if (data['status'] == 'OK' && data['results'].isNotEmpty) {
         final addr = data['results'][0]['formatted_address'];
         setState(() {
@@ -148,6 +149,7 @@ class _DeliveryLocationDialogState extends State<DeliveryLocationDialog> {
       final data = await ApiService.get(
         '/maps/geocode?address=${Uri.encodeComponent(text)}',
       );
+      if (!mounted) return false;
       if (data['status'] == 'OK' && data['results'].isNotEmpty) {
         final result = data['results'][0];
         final lat = result['geometry']['location']['lat'];
@@ -183,6 +185,7 @@ class _DeliveryLocationDialogState extends State<DeliveryLocationDialog> {
       final data = await ApiService.get(
         '/maps/autocomplete?input=${Uri.encodeComponent(input)}',
       );
+      if (!mounted) return;
       if (data['status'] == 'OK') {
         setState(() {
           _suggestions = data['predictions'];
@@ -211,6 +214,7 @@ class _DeliveryLocationDialogState extends State<DeliveryLocationDialog> {
       if (permission == LocationPermission.always ||
           permission == LocationPermission.whileInUse) {
         final pos = await Geolocator.getCurrentPosition();
+        if (!mounted) return;
         final target = LatLng(pos.latitude, pos.longitude);
         _mapController?.animateCamera(CameraUpdate.newLatLngZoom(target, 16));
         setState(() => _lastPick = target);

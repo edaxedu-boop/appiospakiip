@@ -294,6 +294,11 @@ class _HomeScreenState extends State<HomeScreen> {
         lat: result['lat'],
         lng: result['lng'],
       );
+      setState(() {
+        _deliveryAddress = result['address'];
+        _userLat = result['lat'];
+        _userLng = result['lng'];
+      });
       _loadRestaurants();
     }
   }

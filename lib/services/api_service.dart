@@ -104,10 +104,18 @@ class ApiService {
         .get(Uri.parse('$baseUrl$path'), headers: headers)
         .timeout(const Duration(seconds: 30));
     if (res.statusCode >= 400) {
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-      throw ApiException(body['error'] ?? 'Error del servidor', res.statusCode);
+      try {
+        final body = jsonDecode(res.body);
+        if (body is Map<String, dynamic>) {
+          throw ApiException(body['error'] ?? 'Error del servidor', res.statusCode);
+        }
+      } catch (_) {}
+      throw ApiException('Error del servidor (${res.statusCode})', res.statusCode);
     }
-    return jsonDecode(res.body) as List<dynamic>;
+    final decoded = jsonDecode(res.body);
+    if (decoded == null) return [];
+    if (decoded is List) return decoded;
+    return [];
   }
 
   static Future<Map<String, dynamic>> getMap(String path) async {

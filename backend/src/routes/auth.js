@@ -2,6 +2,7 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
+const auth = require('../middleware/auth');
 
 const sign = (payload) =>
     jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
@@ -204,4 +205,75 @@ router.post('/change-password', async (req, res) => {
     res.json({ message: 'Contraseña actualizada correctamente' });
 });
 
+// ── POST /auth/fcm-token ─────────────────────────────────────────
+router.post('/fcm-token', auth, async (req, res) => {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Token es requerido' });
+
+    const role = req.user.role;
+    const userId = req.user.id;
+
+    try {
+        let table = '';
+        if (role === 'admin') table = 'admins';
+        else if (role === 'restaurant') table = 'restaurants';
+        else if (role === 'rider') table = 'riders';
+        else if (role === 'client') table = 'clients';
+        else return res.status(400).json({ error: 'Rol inválido' });
+
+        await pool.query(`UPDATE ${table} SET fcm_token = $1 WHERE id = $2`, [token, userId]);
+        res.json({ message: 'Token FCM guardado exitosamente' });
+    } catch (e) {
+        console.error('Error al guardar token FCM:', e);
+        res.status(500).json({ error: 'Error al guardar token FCM' });
+    }
+});
+
+// ── DELETE /auth/delete-account ─────────────────────────────────────
+router.delete('/delete-account', auth, async (req, res) => {
+    const role = req.user.role;
+    const userId = req.user.id;
+
+    try {
+        if (role === 'client') {
+            // Nullify orders referencing this client
+            await pool.query('UPDATE orders SET client_id = NULL WHERE client_id = $1', [userId]);
+            // Delete client
+            await pool.query('DELETE FROM clients WHERE id = $1', [userId]);
+            return res.json({ message: 'Cuenta de cliente eliminada exitosamente' });
+        } 
+        else if (role === 'rider') {
+            // Nullify orders referencing this rider
+            await pool.query('UPDATE orders SET rider_id = NULL WHERE rider_id = $1', [userId]);
+            // Delete payments
+            await pool.query('DELETE FROM payments WHERE rider_id = $1', [userId]);
+            // Delete rider
+            await pool.query('DELETE FROM riders WHERE id = $1', [userId]);
+            return res.json({ message: 'Cuenta de repartidor eliminada exitosamente' });
+        } 
+        else if (role === 'restaurant') {
+            // Nullify orders
+            await pool.query('UPDATE orders SET restaurant_id = NULL WHERE restaurant_id = $1', [userId]);
+            // Category mapping
+            await pool.query('DELETE FROM restaurant_category_map WHERE restaurant_id = $1', [userId]);
+            // Categories
+            await pool.query('DELETE FROM categories WHERE restaurant_id = $1', [userId]);
+            // Products
+            await pool.query('DELETE FROM products WHERE restaurant_id = $1', [userId]);
+            // Promotions
+            await pool.query('DELETE FROM promotions WHERE restaurant_id = $1', [userId]);
+            // Delete restaurant
+            await pool.query('DELETE FROM restaurants WHERE id = $1', [userId]);
+            return res.json({ message: 'Cuenta de restaurante eliminada exitosamente' });
+        } 
+        else {
+            return res.status(400).json({ error: 'Rol no válido para eliminación' });
+        }
+    } catch (e) {
+        console.error('Error al eliminar cuenta:', e);
+        return res.status(500).json({ error: 'Error interno del servidor al eliminar la cuenta' });
+    }
+});
+
 module.exports = router;
+

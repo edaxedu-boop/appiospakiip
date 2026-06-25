@@ -91,7 +91,7 @@ router.get('/orders/available', auth, async (req, res) => {
         if (riderRows.length === 0) return res.status(404).json({ error: 'Repartidor no encontrado' });
 
         const rider = riderRows[0];
-        if (rider.status !== 'online') return res.json([]);
+        if ((rider.status !== 'online' && rider.status !== 'busy') || !rider.location) return res.json([]);
 
         // 2. Buscar pedidos cerca (radius configurable) y sin repartidor asignado, ordenados por cercanía
         const { rows: configRows } = await pool.query('SELECT rider_view_radius FROM app_config LIMIT 1');
@@ -141,7 +141,7 @@ router.get('/orders/available', auth, async (req, res) => {
     }
 });
 
-// ── GET /riders/orders/active (pedido actual del repartidor) ──────
+// ── GET /riders/orders/active (pedidos actuales del repartidor) ──────
 router.get('/orders/active', auth, async (req, res) => {
     if (req.user.role !== 'rider') return res.status(403).json({ error: 'Solo repartidores' });
 
@@ -158,18 +158,17 @@ router.get('/orders/active', auth, async (req, res) => {
          FROM orders o
          LEFT JOIN restaurants r ON o.restaurant_id = r.id
          WHERE o.rider_id = $1 AND o.status IN ('rider_assigned', 'ready', 'in_delivery', 'preparing')
-         LIMIT 1`,
+         ORDER BY o.created_at ASC`,
         [req.user.id]
     );
 
-    if (rows.length > 0) {
-        const o = rows[0];
+    const activeOrders = rows.map(o => {
         o.rider_earning = parseFloat(((parseFloat(o.delivery_fee || 0) * riderCommission) / 100).toFixed(2));
         o.rider_commission_pct = riderCommission;
-        res.json(o);
-    } else {
-        res.json(null);
-    }
+        return o;
+    });
+
+    res.json(activeOrders);
 });
 
 // ── PATCH /riders/orders/:id/take (tomar un pedido) ────────────────
@@ -179,9 +178,9 @@ router.patch('/orders/:id/take', auth, async (req, res) => {
     const orderId = req.params.id;
     const riderId = req.user.id;
 
-    // Verificar si ya tiene un pedido activo (en camino)
-    const { rows: active } = await pool.query("SELECT id FROM orders WHERE rider_id=$1 AND status IN ('rider_assigned', 'ready', 'in_delivery')", [riderId]);
-    if (active.length > 0) return res.status(400).json({ error: 'Ya tienes un pedido en curso' });
+    // Verificar si ya tiene el límite máximo de pedidos activos (5)
+    const { rows: active } = await pool.query("SELECT id FROM orders WHERE rider_id=$1 AND status IN ('rider_assigned', 'ready', 'in_delivery', 'preparing')", [riderId]);
+    if (active.length >= 5) return res.status(400).json({ error: 'Has alcanzado el límite máximo de 5 pedidos simultáneos.' });
 
     // Verificar si el pedido sigue disponible
     const { rows: order } = await pool.query("SELECT status, rider_id FROM orders WHERE id=$1", [orderId]);
@@ -197,7 +196,24 @@ router.patch('/orders/:id/take', auth, async (req, res) => {
     // Cambiar estado del repartidor a 'busy'
     await pool.query("UPDATE riders SET status='busy' WHERE id=$1", [riderId]);
 
-    res.json({ message: 'Pedido aceptado. Espera a que el restaurante lo marque como listo.', status: 'rider_assigned' });
+    // Enviar notificaciones
+    try {
+        const { rows: updatedOrder } = await pool.query("SELECT client_id, restaurant_id, order_code FROM orders WHERE id=$1", [orderId]);
+        if (updatedOrder.length > 0) {
+            const o = updatedOrder[0];
+            const { sendPushNotification } = require('../services/notificationService');
+            if (o.restaurant_id) {
+                sendPushNotification('restaurant', o.restaurant_id, 'Repartidor asignado', `El repartidor ha aceptado el pedido #${o.order_code || orderId}.`, { orderId: orderId.toString(), type: 'rider_assigned' });
+            }
+            if (o.client_id) {
+                sendPushNotification('client', o.client_id, 'Repartidor en camino', `Un repartidor ha sido asignado para tu pedido #${o.order_code || orderId}.`, { orderId: orderId.toString(), type: 'rider_assigned' });
+            }
+        }
+    } catch (err) {
+        console.error('Error sending rider assigned notifications:', err);
+    }
+
+    res.json({ message: 'Pedido tomado con éxito.', status: 'rider_assigned' });
 });
 
 // ── PATCH /riders/orders/:id/pickup (recoger el pedido) ──────────────
@@ -215,17 +231,29 @@ router.patch('/orders/:id/pickup', auth, async (req, res) => {
         return res.status(403).json({ error: 'Este pedido no te pertenece' });
     }
 
+    // No restringir que tenga que estar en 'ready'. Permitir si está en 'rider_assigned', 'preparing', 'accepted' o 'ready'
     const isFavor = order[0].restaurant_id === null;
-
-    // Pakiip Favor: no necesita que el restaurante lo acepte, puede recoger directamente
-    if (!isFavor && order[0].status !== 'ready') {
-        return res.status(400).json({ error: 'El pedido aún no ha sido marcado como listo por el restaurante' });
+    const allowedStatusForPickup = ['rider_assigned', 'preparing', 'accepted', 'ready'];
+    if (!isFavor && !allowedStatusForPickup.includes(order[0].status)) {
+        return res.status(400).json({ error: 'El pedido no se encuentra en un estado válido para ser recogido' });
     }
 
     await pool.query(
         "UPDATE orders SET status='in_delivery' WHERE id=$1",
         [orderId]
     );
+
+    // Enviar notificación al cliente
+    try {
+        const { rows: updatedOrder } = await pool.query("SELECT client_id, order_code FROM orders WHERE id=$1", [orderId]);
+        if (updatedOrder.length > 0 && updatedOrder[0].client_id) {
+            const o = updatedOrder[0];
+            const { sendPushNotification } = require('../services/notificationService');
+            sendPushNotification('client', o.client_id, 'Pedido en camino', `Tu pedido #${o.order_code || orderId} ya está en camino a tu dirección.`, { orderId: orderId.toString(), type: 'in_delivery' });
+        }
+    } catch (err) {
+        console.error('Error sending pickup notification:', err);
+    }
 
     res.json({ message: 'Pedido recogido, ¡en camino!', status: 'in_delivery' });
 });
@@ -242,8 +270,35 @@ router.patch('/orders/:id/deliver', auth, async (req, res) => {
         [orderId, riderId]
     );
 
-    // Volver a poner al repartidor como disponible
-    await pool.query("UPDATE riders SET status='online' WHERE id=$1", [riderId]);
+    // Volver a poner al repartidor como disponible solo si no le quedan pedidos activos
+    try {
+        const { rows: remainingActive } = await pool.query(
+            "SELECT id FROM orders WHERE rider_id = $1 AND status IN ('rider_assigned', 'ready', 'in_delivery', 'preparing')",
+            [riderId]
+        );
+        if (remainingActive.length === 0) {
+            await pool.query("UPDATE riders SET status='online' WHERE id=$1", [riderId]);
+        }
+    } catch (err) {
+        console.error('Error checking remaining active orders for rider:', err);
+    }
+
+    // Enviar notificaciones de entrega
+    try {
+        const { rows: updatedOrder } = await pool.query("SELECT client_id, restaurant_id, order_code FROM orders WHERE id=$1", [orderId]);
+        if (updatedOrder.length > 0) {
+            const o = updatedOrder[0];
+            const { sendPushNotification } = require('../services/notificationService');
+            if (o.client_id) {
+                sendPushNotification('client', o.client_id, 'Pedido entregado', `¡Tu pedido #${o.order_code || orderId} ha sido entregado! ¡Buen provecho!`, { orderId: orderId.toString(), type: 'delivered' });
+            }
+            if (o.restaurant_id) {
+                sendPushNotification('restaurant', o.restaurant_id, 'Pedido entregado', `El pedido #${o.order_code || orderId} ha sido entregado al cliente.`, { orderId: orderId.toString(), type: 'delivered' });
+            }
+        }
+    } catch (err) {
+        console.error('Error sending delivery notifications:', err);
+    }
 
     res.json({ message: 'Pedido entregado' });
 });

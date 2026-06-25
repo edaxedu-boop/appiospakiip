@@ -65,3 +65,9 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")
 }
+
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.warn("⚠️ Warning: google-services.json is missing in android/app/. Firebase Push Notifications will not be active, but the app will compile.")
+}

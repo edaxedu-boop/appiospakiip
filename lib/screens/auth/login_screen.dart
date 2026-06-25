@@ -8,6 +8,7 @@ import 'package:pakiip/screens/common/home_screen.dart';
 import 'package:pakiip/screens/auth/register_screen.dart';
 import 'package:pakiip/screens/restaurant/restaurant_panel_screen.dart';
 import 'package:pakiip/screens/rider/rider_panel_screen.dart';
+import 'package:pakiip/services/push_notification_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -52,6 +53,9 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final role = await ApiService.login(email, password);
       final name = await ApiService.getName() ?? '';
+
+      // Registrar token FCM al iniciar sesión
+      PushNotificationService.registerFcmToken();
 
       if (!mounted) return;
       setState(() => _isLoading = false);

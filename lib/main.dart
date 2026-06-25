@@ -3,10 +3,17 @@ import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'screens/auth/welcome_screen.dart';
 import 'services/cart_service.dart';
+import 'services/push_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('es', null);
+  await PushNotificationService.initialize();
+  await PushNotificationService.requestPermissions();
+  
+  // Register FCM token on startup if already logged in
+  PushNotificationService.registerFcmToken();
+
   runApp(
     MultiProvider(
       providers: [ChangeNotifierProvider(create: (_) => CartService())],
